@@ -227,7 +227,7 @@ class ImageProcessorApp:
         self.root.bind("<Control-y>", lambda e: self.redo())
         
     def create_main_layout(self):
-        """Create main application layout"""
+        """Create main application layout with a functional scrollbar"""
         # Main container
         main_container = ttk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -235,38 +235,55 @@ class ImageProcessorApp:
         # Left panel - Control panel
         left_panel = ttk.Frame(main_container, width=350)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 5))
-        left_panel.pack_propagate(False)
+        left_panel.pack_propagate(False) # Prevents panel from shrinking
         
         # Control panel title
         ttk.Label(left_panel, text="Image Processing Tools", 
                  font=("Arial", 14, "bold")).pack(pady=10)
         
-        # Create scrollable frame for controls
-        canvas_scroll = tk.Canvas(left_panel, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(left_panel, orient="vertical", command=canvas_scroll.yview)
-        scrollable_frame = ttk.Frame(canvas_scroll)
+        # --- SCROLLABLE CANVAS SETUP ---
+        self.ctrl_canvas = tk.Canvas(left_panel, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(left_panel, orient="vertical", command=self.ctrl_canvas.yview)
         
+        # The frame that actually holds the widgets
+        scrollable_frame = ttk.Frame(self.ctrl_canvas)
+        
+        # 1. Capture the window ID to resize it later
+        self.canvas_window = self.ctrl_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        # 2. Update scrollregion when the frame size changes
         scrollable_frame.bind(
             "<Configure>",
-            lambda e: canvas_scroll.configure(scrollregion=canvas_scroll.bbox("all"))
+            lambda e: self.ctrl_canvas.configure(scrollregion=self.ctrl_canvas.bbox("all"))
         )
+
+        # 3. Force the frame to match the width of the canvas
+        self.ctrl_canvas.bind(
+            "<Configure>",
+            lambda e: self.ctrl_canvas.itemconfig(self.canvas_window, width=e.width)
+        )
+
+        self.ctrl_canvas.configure(yscrollcommand=scrollbar.set)
         
-        canvas_scroll.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas_scroll.configure(yscrollcommand=scrollbar.set)
+        # Add mousewheel support
+        self.ctrl_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
         
-        canvas_scroll.pack(side="left", fill="both", expand=True)
+        self.ctrl_canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Add controls to scrollable frame
+        # Add controls to the frame
         self.create_controls(scrollable_frame)
         
         # Right panel - Image display
         right_panel = ttk.Frame(main_container)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
-        # Canvas for image display
         self.canvas = tk.Canvas(right_panel, bg="gray25", width=800, height=600)
         self.canvas.pack(fill=tk.BOTH, expand=True)
+
+    def _on_mousewheel(self, event):
+        """Allows scrolling with the mouse wheel"""
+        self.ctrl_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
     def create_controls(self, parent):
         """Create control buttons and sliders"""
